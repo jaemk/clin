@@ -1,4 +1,4 @@
-# clin
+# clin [![Build Status](https://travis-ci.org/jaemk/clin.svg?branch=master)](https://travis-ci.org/jaemk/clin) [![crates.io:clin](https://img.shields.io/crates/v/clin.svg?label=clin)](https://crates.io/crates/clin)
 
 > Command completion notifications, client & server
 
