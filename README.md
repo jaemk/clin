@@ -7,7 +7,11 @@
 `clin` provides desktop notifications of completed commands.
 
 ```
+# Pass a command as trailing arguments
 clin -- cargo build --release
+
+# Pass a command as a string argument
+clin -c 'cargo build --release'
 ```
 
 `clin` can also be used on remote machines by using `ssh` remote port forwarding.
@@ -20,6 +24,5 @@ clin listen
 ssh -R 6445:localhost:6445 you@host
 
 # Use the `--send` arg
-clin -s -- sleep 5
-
+clin -s -- ./some-build-script.sh
 ```
