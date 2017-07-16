@@ -2,6 +2,12 @@
 name = "clin"
 version = "0.1.0"
 authors = ["James Kominick <james.kominick@gmail.com>"]
+repository = "https://github.com/jaemk/clin"
+description = "Command completion desktop notifications"
+readme = "README.md"
+keywords = ["cli", "notification", "remote", "server"]
+license = "MIT"
+exclude = ["ci/", ".travis.yml"]
 
 [dependencies]
 notify-rust = "3.4"
