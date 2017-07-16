@@ -11,7 +11,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
-    Command(String),
+    Msg(String),
+    Command(i32),
     Io(std::io::Error),
     Nul(std::ffi::NulError),
     ParseInt(std::num::ParseIntError),
@@ -24,12 +25,13 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use Error::*;
         match *self {
-            Command(ref s)  => write!(f, "Command Error: {}", s),
-            Io(ref e)       => write!(f, "Io Error: {}", e),
-            Nul(ref e)      => write!(f, "Nul Error: {}", e),
-            ParseInt(ref e) => write!(f, "ParseInt Error: {}", e),
-            Notify(ref e)   => write!(f, "Notify Error: {}", e),
-            Json(ref e)     => write!(f, "Json Error: {}", e),
+            Msg(ref s)      => write!(f, "{}", s),
+            Command(n)      => write!(f, "CommandError-StatusCode: {}", n),
+            Io(ref e)       => write!(f, "IoError: {}", e),
+            Nul(ref e)      => write!(f, "NulError: {}", e),
+            ParseInt(ref e) => write!(f, "ParseIntError: {}", e),
+            Notify(ref e)   => write!(f, "NotifyError: {}", e),
+            Json(ref e)     => write!(f, "JsonError: {}", e),
         }
     }
 }

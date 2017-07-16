@@ -6,7 +6,10 @@ authors = ["James Kominick <james.kominick@gmail.com>"]
 [dependencies]
 notify-rust = "3.4"
 clap = "2.25"
-libc = "0.2"
 serde = "1"
+libc = "0.2"
 serde_derive = "1"
 serde_json = "1"
+log = "0.3"
+env_logger = "0.4"
+chrono = "0.4"

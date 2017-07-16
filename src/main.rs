@@ -1,7 +1,9 @@
 #[macro_use] extern crate clap;
 extern crate notify_rust;
 extern crate libc;
-
+#[macro_use] extern crate log;
+extern crate env_logger;
+extern crate chrono;
 #[macro_use] extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
@@ -10,10 +12,12 @@ extern crate serde_json;
 
 use clap::{App, Arg, SubCommand, ArgMatches, AppSettings};
 use notify_rust::{Notification, Timeout};
+use chrono::Local;
 
 use std::io;
-use std::process;
+use std::env;
 use std::ffi;
+use std::process;
 use std::net;
 
 use errors::*;
@@ -35,23 +39,42 @@ fn main() {
         .author("James K. <james.kominick@gmail.com>")
         .about("\
 Command line notification tool
-Supports local and networked notifications")
+Supports local and networked notifications
+
+examples:
+clin -- ./some-build-script.sh --flag --arg1 'some arg'
+clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
         .subcommand(SubCommand::with_name("listen")
                     .about("Listen for network notifications")
+            .arg(Arg::with_name("log")
+                 .help("Turn on server logging. Shortcut for `LOG=info clin listen`")
+                 .long("log")
+                 .required(false)
+                 .takes_value(false))
             .arg(Arg::with_name("port")
                  .help(&format!("Port to listen on, defaults to {}", DEFAULT_PORT))
                  .long("port")
                  .short("p")
                  .required(false)
-                 .takes_value(true)))
+                 .takes_value(true))
+            .arg(Arg::with_name("public")
+                 .help("Listen publicly on 0.0.0.0, instead of 127.0.0.1")
+                 .long("public")
+                 .required(false)
+                 .takes_value(false)))
         .arg(Arg::with_name("send")
              .help("Send notification to a clin-listener on the default or specified port")
              .long("send")
              .short("s")
              .required(false)
              .takes_value(false))
+        .arg(Arg::with_name("host")
+             .help("Specify host to send notification to, defaults to localhost")
+             .long("host")
+             .required(false)
+             .takes_value(true))
         .arg(Arg::with_name("port")
-             .help("Port to send notification on, defaults to 6445")
+             .help("Specify port to send notification to, defaults to 6445")
              .long("port")
              .short("p")
              .required(false)
@@ -60,6 +83,12 @@ Supports local and networked notifications")
              .help("Notification timeout in milliseconds, defaults to 10s")
              .long("timeout")
              .short("t")
+             .required(false)
+             .takes_value(true))
+        .arg(Arg::with_name("command_string")
+             .help("Specify command to run as a string, has priority over trailing args")
+             .long("command")
+             .short("c")
              .required(false)
              .takes_value(true))
         .arg(Arg::with_name("cmd")
@@ -80,80 +109,142 @@ Supports local and networked notifications")
 
 fn run(matches: ArgMatches) -> Result<()> {
     if let Some(listen_matches) = matches.subcommand_matches("listen") {
-        use std::io::Read;
-
+        init_logger(listen_matches.is_present("log"));
+        let host = if listen_matches.is_present("public") { "0.0.0.0" } else { "127.0.0.1" };
         let port = listen_matches.value_of("port")
             .unwrap_or(DEFAULT_PORT_STR)
             .parse::<usize>()?;
-
-        let addr = format!("{}:{}", DEFAULT_HOST, port);
-        println!("** Listening on {} **", addr);
-        let listener = net::TcpListener::bind(&addr)?;
-        for stream in listener.incoming() {
-            let mut stream = stream?;
-            println!("new connection");
-            let mut s = String::new();
-            stream.read_to_string(&mut s)?;
-            let note: ApiNote = serde_json::from_str(&s)?;
-            println!("Incoming! <- {:?}", note);
-            Note::with_msg(&note.msg)
-                .timeout(note.timeout)
-                .port(port)
-                .push()?;
-        }
-
-        return Ok(())
+        let addr = format!("{}:{}", host, port);
+        return listen(&addr);
     }
 
     let send = matches.is_present("send");
+    let host = matches.value_of("host")
+        .unwrap_or(DEFAULT_HOST);
     let port = matches.value_of("port")
         .unwrap_or(DEFAULT_PORT_STR)
         .parse::<usize>()?;
     let timeout = matches.value_of("timeout")
         .unwrap_or(DEFAULT_TIMEOUT_STR)
         .parse::<u32>()?;
-    if let Some(cmd) = matches.values_of("cmd").map(|stuff| stuff.collect::<Vec<&str>>()) {
-        let cmd = cmd.into_iter().map(String::from).collect::<Vec<String>>();
-        let cmd = cmd.join(" ");
-        println!("clin: `{}`", cmd);
 
-        let add_msg = match run_command(&cmd) {
-            Err(Error::Command(e)) => {
-                format!("{}", e)
-            }
-            Err(e) => return Err(e),
-            Ok(_) => "Complete ✓".to_string(),
-        };
-        let msg = format!("`{}`\n{}", cmd, add_msg);
-        Note::with_msg(&msg)
-            .timeout(timeout)
-            .send(send)
-            .port(port)
-            .push()?;
-        return Ok(())
+    let cmd = match (matches.value_of("command_string"), matches.is_present("cmd")) {
+        (Some(c), _) => c.to_owned(),
+        (_, true) => {
+            // Pull out the full trailing args list...
+            // The built in parsing will strip out any '--' from the list
+            let args = env::args().collect::<Vec<_>>();
+            let ind = match args.iter().position(|item| item == "--") {
+                None => bail!(Error::Msg, "Error parsing command, no `--` delimiter found"),
+                Some(i) => i,
+            };
+            let (_, args) = args.split_at(ind + 1);
+            args.join(" ")
+        }
+        _ => {
+            println!("clin: see `--help`");
+            return Ok(())
+        }
+    };
+
+    println!("clin: `{}`", cmd);
+
+    let title = match run_command(&cmd) {
+        Err(Error::Command(ret)) => {
+            format!("Error ✗ -- exit status: {}", ret)
+        }
+        Err(e) => return Err(e),
+        Ok(_) => "Complete ✓".to_string(),
+    };
+
+    Note::with_msg(&cmd)
+        .title(&title)
+        .timeout(timeout)
+        .send(send)
+        .host(host)
+        .port(port)
+        .push()?;
+    Ok(())
+}
+
+
+/// Initialize loggers for the listening server
+fn init_logger(log: bool) {
+    if log {
+        env::set_var("LOG", "info")
     }
 
-    println!("clin: see `--help`");
+    // Set a custom logging format & change the env-var to "LOG"
+    // e.g. LOG=info clin listen
+    env_logger::LogBuilder::new()
+        .format(|record| {
+            format!("{} [{}] - [{}] -> {}",
+                Local::now().format("%Y-%m-%d_%H:%M:%S"),
+                record.level(),
+                record.location().module_path(),
+                record.args()
+                )
+            })
+        .parse(&env::var("LOG").unwrap_or_default())
+        .init()
+        .expect("failed to initialize logger");
+}
+
+
+/// Listen on the given address for incoming `ApiNote` messages
+/// and generate local notifications
+fn listen(addr: &str) -> Result<()> {
+    use io::Read;
+    info!("** Listening on {} **", addr);
+
+    let listener = net::TcpListener::bind(&addr)?;
+    for stream in listener.incoming() {
+        let mut stream = stream?;
+        let mut s = String::new();
+        stream.read_to_string(&mut s)?;
+        let note: ApiNote = serde_json::from_str(&s)?;
+        info!("Incoming! <- {:?}", note);
+        Note::with_msg(&note.msg)
+            .title(&note.title)
+            .timeout(note.timeout)
+            .push()?;
+    }
     Ok(())
 }
 
 
-fn run_command(command: &str) -> Result<()> {
-    let c_str = ffi::CString::new(command)?;
-    let ret = unsafe { libc::system(c_str.as_ptr()) };
-    if ret != 0 { bail!(Error::Command, "Command `{}` failed with status: `{}`", command, ret) }
+/// Run a command in foreground
+fn run_command(cmd: &str) -> Result<()> {
+    let c_str = ffi::CString::new(cmd)?;
+    let ret = unsafe {
+        let ret = libc::system(c_str.as_ptr());
+        // convert child status code to a normal code 0-255
+        libc::WEXITSTATUS(ret)
+    };
+    if ret != 0 { return Err(Error::Command(ret)) }
     Ok(())
 }
 
 
+/// Notification information to send over the wire from a remote client
+/// to a local listening server
 #[derive(Debug, Serialize, Deserialize)]
 struct ApiNote {
+    title: String,
     msg: String,
     timeout: u32,
 }
 impl ApiNote {
     fn with_msg(msg: &str) -> ApiNote {
-        ApiNote { msg: msg.to_owned(), timeout: DEFAULT_TIMEOUT }
+        ApiNote {
+            title: DEFAULT_TITLE.to_owned(),
+            msg: msg.to_owned(),
+            timeout: DEFAULT_TIMEOUT,
+        }
+    }
+    fn title(mut self, title: &str) -> ApiNote {
+        self.title = title.to_owned();
+        self
     }
     fn timeout(mut self, millis: u32) -> ApiNote {
         self.timeout = millis;
@@ -162,15 +253,28 @@ impl ApiNote {
 }
 
 
+/// Notification builder
 struct Note {
+    title: String,
     msg: String,
     timeout: u32,
     send: bool,
+    host: String,
     port: usize,
 }
 impl Note {
     fn with_msg(msg: &str) -> Note {
-        Note { msg: msg.to_owned(), timeout: DEFAULT_TIMEOUT, send: false, port: DEFAULT_PORT }
+        Note {
+            title: DEFAULT_TITLE.to_owned(),
+            msg: msg.to_owned(),
+            timeout: DEFAULT_TIMEOUT,
+            send: false,
+            host: DEFAULT_HOST.to_owned(),
+            port: DEFAULT_PORT }
+    }
+    fn title(mut self, title: &str) -> Note {
+        self.title = title.to_owned();
+        self
     }
     fn timeout(mut self, millis: u32) -> Note {
         self.timeout = millis;
@@ -180,22 +284,28 @@ impl Note {
         self.send = send;
         self
     }
+    fn host(mut self, host: &str) -> Note {
+        self.host = host.to_owned();
+        self
+    }
     fn port(mut self, port: usize) -> Note {
         self.port = port;
         self
     }
     fn push(self) -> Result<()> {
         if self.send {
-            use std::io::Write;
-            let addr = format!("{}:{}", DEFAULT_HOST, self.port);
-            let note = ApiNote::with_msg(&self.msg).timeout(self.timeout);
+            use io::Write;
+            let addr = format!("{}:{}", self.host, self.port);
+            let note = ApiNote::with_msg(&self.msg)
+                .title(&self.title)
+                .timeout(self.timeout);
             let note = serde_json::to_string(&note)?;
             let mut stream = net::TcpStream::connect(&addr)?;
             stream.write(note.as_bytes())?;
         } else {
             Notification::new()
                 .icon(DEFAULT_ICON)
-                .summary(DEFAULT_TITLE)
+                .summary(&self.title)
                 .timeout(Timeout::Milliseconds(self.timeout))
                 .body(&self.msg)
                 .show()?;
