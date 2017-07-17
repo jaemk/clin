@@ -30,6 +30,7 @@ pub static DEFAULT_PORT_STR:    &'static str = "6445";
 pub static DEFAULT_PORT:        usize        = 6445;
 pub static DEFAULT_TIMEOUT_STR: &'static str = "10000";
 pub static DEFAULT_TIMEOUT:     u32          = 10000;
+pub static DEFAULT_TIMEOUT_SECONDS_STR: &'static str = "10";
 
 
 fn main() {
@@ -52,7 +53,7 @@ clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
                  .required(false)
                  .takes_value(false))
             .arg(Arg::with_name("port")
-                 .help(&format!("Port to listen on, defaults to {}", DEFAULT_PORT))
+                 .help(&format!("Port to listen on, defaults to `{}`, overrides `CLIN_LISTEN_PORT`", DEFAULT_PORT))
                  .long("port")
                  .short("p")
                  .required(false)
@@ -63,35 +64,36 @@ clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
                  .required(false)
                  .takes_value(false)))
         .arg(Arg::with_name("send")
-             .help("Send notification to a clin-listener on the default or specified port")
+             .help("Send notification to a clin-listener, also enabled by `CLIN_SEND`")
              .long("send")
              .short("s")
              .required(false)
              .takes_value(false))
         .arg(Arg::with_name("host")
-             .help("Specify host to send notification to, defaults to localhost")
+             .help(&format!("Host to send notification to, defaults to `{}`, overrides `CLIN_SEND_HOST`", DEFAULT_HOST))
              .long("host")
              .required(false)
              .takes_value(true))
         .arg(Arg::with_name("port")
-             .help("Specify port to send notification to, defaults to 6445")
+             .help(&format!("Port to send notification over, defaults to `{}`, overrides `CLIN_SEND_PORT`", DEFAULT_PORT))
              .long("port")
              .short("p")
              .required(false)
              .takes_value(true))
         .arg(Arg::with_name("timeout")
-             .help("Notification timeout in milliseconds, defaults to 10s")
+             .help(&format!("Notification timeout in milliseconds, defaults to `{}s`, overrides `CLIN_TIMEOUT`", DEFAULT_TIMEOUT_SECONDS_STR))
              .long("timeout")
              .short("t")
              .required(false)
              .takes_value(true))
         .arg(Arg::with_name("command_string")
-             .help("Specify command to run as a string, has priority over trailing args")
+             .help("Specify command to run as a string, overrides trailing args")
              .long("command")
              .short("c")
              .required(false)
              .takes_value(true))
         .arg(Arg::with_name("cmd")
+             .help("Specify a command as arguments trailing an initial `--`")
              .multiple(true)
              .required(false)
              .last(true))
@@ -111,21 +113,28 @@ fn run(matches: ArgMatches) -> Result<()> {
     if let Some(listen_matches) = matches.subcommand_matches("listen") {
         init_logger(listen_matches.is_present("log"));
         let host = if listen_matches.is_present("public") { "0.0.0.0" } else { "127.0.0.1" };
+        let fallback_port = env::var("CLIN_LISTEN_PORT").unwrap_or_else(|_| DEFAULT_PORT_STR.to_string());
         let port = listen_matches.value_of("port")
-            .unwrap_or(DEFAULT_PORT_STR)
+            .unwrap_or(&fallback_port)
             .parse::<usize>()?;
         let addr = format!("{}:{}", host, port);
         return listen(&addr);
     }
 
-    let send = matches.is_present("send");
+    let send = matches.is_present("send") ||
+        env::var("CLIN_SEND").ok()
+            .and_then(|s| if s == "1" { Some(()) } else { None })
+            .is_some();
+    let fallback_host = env::var("CLIN_SEND_HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
     let host = matches.value_of("host")
-        .unwrap_or(DEFAULT_HOST);
+        .unwrap_or(&fallback_host);
+    let fallback_port = env::var("CLIN_SEND_PORT").unwrap_or_else(|_| DEFAULT_PORT_STR.to_string());
     let port = matches.value_of("port")
-        .unwrap_or(DEFAULT_PORT_STR)
+        .unwrap_or(&fallback_port)
         .parse::<usize>()?;
+    let fallback_timeout = env::var("CLIN_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_STR.to_string());
     let timeout = matches.value_of("timeout")
-        .unwrap_or(DEFAULT_TIMEOUT_STR)
+        .unwrap_or(&fallback_timeout)
         .parse::<u32>()?;
 
     let cmd = match (matches.value_of("command_string"), matches.is_present("cmd")) {
@@ -203,7 +212,7 @@ fn listen(addr: &str) -> Result<()> {
         let mut s = String::new();
         stream.read_to_string(&mut s)?;
         let note: ApiNote = serde_json::from_str(&s)?;
-        info!("Incoming! <- {:?}", note);
+        info!("{:?}", note);
         Note::with_msg(&note.msg)
             .title(&note.title)
             .timeout(note.timeout)
