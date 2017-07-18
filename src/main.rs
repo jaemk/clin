@@ -227,7 +227,7 @@ fn listen(addr: &str) -> Result<()> {
         stream.read_to_string(&mut s)?;
         if s == "ping" { continue; }
         let note: ApiNote = serde_json::from_str(&s)?;
-        info!("{:?}", note);
+        info!("[{}]: {}", note.title, note.msg);
         Note::with_msg(&note.msg)
             .title(&note.title)
             .timeout(note.timeout)
