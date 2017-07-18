@@ -27,7 +27,7 @@ pub static DEFAULT_TITLE:       &'static str = "CLIN:";
 pub static DEFAULT_ICON:        &'static str = "terminal";
 pub static DEFAULT_HOST:        &'static str = "127.0.0.1";
 pub static DEFAULT_PORT_STR:    &'static str = "6445";
-pub static DEFAULT_PORT:        usize        = 6445;
+pub static DEFAULT_PORT:        u32          = 6445;
 pub static DEFAULT_TIMEOUT_STR: &'static str = "10000";
 pub static DEFAULT_TIMEOUT:     u32          = 10000;
 pub static DEFAULT_TIMEOUT_SECONDS_STR: &'static str = "10";
@@ -116,7 +116,7 @@ fn run(matches: ArgMatches) -> Result<()> {
         let fallback_port = env::var("CLIN_LISTEN_PORT").unwrap_or_else(|_| DEFAULT_PORT_STR.to_string());
         let port = listen_matches.value_of("port")
             .unwrap_or(&fallback_port)
-            .parse::<usize>()?;
+            .parse::<u32>()?;
         let addr = format!("{}:{}", host, port);
         return listen(&addr);
     }
@@ -131,7 +131,7 @@ fn run(matches: ArgMatches) -> Result<()> {
     let fallback_port = env::var("CLIN_SEND_PORT").unwrap_or_else(|_| DEFAULT_PORT_STR.to_string());
     let port = matches.value_of("port")
         .unwrap_or(&fallback_port)
-        .parse::<usize>()?;
+        .parse::<u32>()?;
     let fallback_timeout = env::var("CLIN_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_STR.to_string());
     let timeout = matches.value_of("timeout")
         .unwrap_or(&fallback_timeout)
@@ -284,7 +284,7 @@ struct Note {
     timeout: u32,
     send: bool,
     host: String,
-    port: usize,
+    port: u32,
 }
 impl Note {
     fn with_msg(msg: &str) -> Note {
@@ -312,7 +312,7 @@ impl Note {
         self.host = host.to_owned();
         self
     }
-    fn port(mut self, port: usize) -> Note {
+    fn port(mut self, port: u32) -> Note {
         self.port = port;
         self
     }
