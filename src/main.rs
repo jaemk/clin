@@ -137,6 +137,10 @@ fn run(matches: ArgMatches) -> Result<()> {
         .unwrap_or(&fallback_timeout)
         .parse::<u32>()?;
 
+    if send && can_connect(&host, port).is_err() {
+        bail!(Error::Network, "Unable to connect to clin-listener at `{}:{}`", host, port)
+    }
+
     let cmd = match (matches.value_of("command_string"), matches.is_present("cmd")) {
         (Some(c), _) => c.to_owned(),
         (_, true) => {
@@ -200,6 +204,16 @@ fn init_logger(log: bool) {
 }
 
 
+/// Check if we can connect to the specified receiver
+fn can_connect(host: &str, port: u32) -> Result<()> {
+    use io::Write;
+    let addr = format!("{}:{}", host, port);
+    let mut stream = net::TcpStream::connect(&addr)?;
+    stream.write("ping".as_bytes())?;
+    Ok(())
+}
+
+
 /// Listen on the given address for incoming `ApiNote` messages
 /// and generate local notifications
 fn listen(addr: &str) -> Result<()> {
@@ -211,6 +225,7 @@ fn listen(addr: &str) -> Result<()> {
         let mut stream = stream?;
         let mut s = String::new();
         stream.read_to_string(&mut s)?;
+        if s == "ping" { continue; }
         let note: ApiNote = serde_json::from_str(&s)?;
         info!("{:?}", note);
         Note::with_msg(&note.msg)
