@@ -8,7 +8,13 @@ extern crate chrono;
 extern crate serde;
 extern crate serde_json;
 
+extern crate reqwest;
+extern crate tempdir;
+extern crate flate2;
+extern crate tar;
+
 #[macro_use] mod errors;
+mod upgrade;
 
 use clap::{App, Arg, SubCommand, ArgMatches, AppSettings};
 use notify_rust::{Notification, Timeout};
@@ -45,6 +51,16 @@ Supports local and networked notifications
 examples:
 clin -- ./some-build-script.sh --flag --arg1 'some arg'
 clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
+        .subcommand(SubCommand::with_name("self")
+                    .about("Self referential things")
+                    .subcommand(SubCommand::with_name("upgrade")
+                        .about("Upgrade to the latest binary release, replacing this binary")
+                        .arg(Arg::with_name("quiet")
+                             .help("Suppress unnecessary download output")
+                             .long("quiet")
+                             .short("q")
+                             .required(false)
+                             .takes_value(false))))
         .subcommand(SubCommand::with_name("listen")
                     .about("Listen for network notifications")
             .arg(Arg::with_name("log")
@@ -110,6 +126,15 @@ clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
 
 
 fn run(matches: ArgMatches) -> Result<()> {
+    if let Some(self_matches) = matches.subcommand_matches("self") {
+        if let Some(upgrade_matches) = self_matches.subcommand_matches("upgrade") {
+            let show_progress = !upgrade_matches.is_present("quiet");
+            return upgrade::run(show_progress);
+        }
+        return see_help();
+    }
+
+    // Initialize a clin-listener
     if let Some(listen_matches) = matches.subcommand_matches("listen") {
         init_logger(listen_matches.is_present("log"));
         let host = if listen_matches.is_present("public") { "0.0.0.0" } else { "127.0.0.1" };
@@ -121,6 +146,7 @@ fn run(matches: ArgMatches) -> Result<()> {
         return listen(&addr);
     }
 
+    // Capture default and overridden notification arguments
     let send = matches.is_present("send") ||
         env::var("CLIN_SEND").ok()
             .and_then(|s| if s == "1" { Some(()) } else { None })
@@ -137,10 +163,12 @@ fn run(matches: ArgMatches) -> Result<()> {
         .unwrap_or(&fallback_timeout)
         .parse::<u32>()?;
 
+    // If sending, make sure specified connection works
     if send && can_connect(&host, port).is_err() {
         bail!(Error::Network, "Unable to connect to clin-listener at `{}:{}`", host, port)
     }
 
+    // Capture command contents or bail out if nothing was provided
     let cmd = match (matches.value_of("command_string"), matches.is_present("cmd")) {
         (Some(c), _) => c.to_owned(),
         (_, true) => {
@@ -155,8 +183,7 @@ fn run(matches: ArgMatches) -> Result<()> {
             args.join(" ")
         }
         _ => {
-            println!("clin: see `--help`");
-            return Ok(())
+            return see_help();
         }
     };
 
@@ -176,8 +203,13 @@ fn run(matches: ArgMatches) -> Result<()> {
         .send(send)
         .host(host)
         .port(port)
-        .push()?;
-    Ok(())
+        .push()
+}
+
+
+fn see_help() -> Result<()> {
+    println!("clin: see `--help`");
+    return Ok(());
 }
 
 
