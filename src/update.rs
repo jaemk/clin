@@ -196,6 +196,17 @@ fn replace_exe(current_exe: &path::Path, new_exe: &path::Path, tmp_file: &path::
 
 /// Upgrade the current binary to the latest release
 pub fn run(show_progress: bool) -> Result<()> {
+    // Make sure openssl can find required files
+    #[cfg(target_os="linux")]
+    {
+        if env::var_os("SSL_CERT_FILE").is_none() {
+            env::set_var("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt");
+        }
+        if env::var_os("SSL_CERT_DIR").is_none() {
+            env::set_var("SSL_CERT_DIR", "/etc/ssl/certs");
+        }
+    }
+
     let current_exe = env::current_exe()?;
 
     print_flush!("Checking target-arch... ");
