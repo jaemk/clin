@@ -118,3 +118,9 @@ macro_rules! bail {
         return Err(format_err!($e_type, $literal, $($arg),*))
     };
 }
+
+macro_rules! bail_help {
+    () => {
+        bail!(Error::Msg, "Too few arguments... see `--help`")
+    }
+}
