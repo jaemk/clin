@@ -5,6 +5,7 @@ Error type, conversions, and macros
 use std;
 use notify_rust;
 use serde_json;
+use reqwest;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -12,6 +13,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     Msg(String),
+    Upgrade(String),
     Network(String),
     Command(i32),
     Io(std::io::Error),
@@ -19,6 +21,7 @@ pub enum Error {
     ParseInt(std::num::ParseIntError),
     Notify(notify_rust::Error),
     Json(serde_json::Error),
+    Reqwest(reqwest::Error),
 }
 
 
@@ -27,6 +30,7 @@ impl std::fmt::Display for Error {
         use Error::*;
         match *self {
             Msg(ref s)      => write!(f, "{}", s),
+            Upgrade(ref s)  => write!(f, "UpgradeError: {}", s),
             Network(ref s)  => write!(f, "NetworkError: {}", s),
             Command(n)      => write!(f, "CommandError-StatusCode: {}", n),
             Io(ref e)       => write!(f, "IoError: {}", e),
@@ -34,6 +38,7 @@ impl std::fmt::Display for Error {
             ParseInt(ref e) => write!(f, "ParseIntError: {}", e),
             Notify(ref e)   => write!(f, "NotifyError: {}", e),
             Json(ref e)     => write!(f, "JsonError: {}", e),
+            Reqwest(ref e)  => write!(f, "ReqwestError: {}", e),
         }
     }
 }
@@ -52,6 +57,7 @@ impl std::error::Error for Error {
             ParseInt(ref e)     => e,
             Notify(ref e)       => e,
             Json(ref e)         => e,
+            Reqwest(ref e)      => e,
             _ => return None,
         })
     }
@@ -88,6 +94,12 @@ impl From<serde_json::Error> for Error {
     }
 }
 
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Error {
+        Error::Reqwest(e)
+    }
+}
+
 
 macro_rules! format_err {
     ($e_type:expr, $literal:expr) => {
@@ -105,4 +117,10 @@ macro_rules! bail {
     ($e_type:expr, $literal:expr, $($arg:expr),*) => {
         return Err(format_err!($e_type, $literal, $($arg),*))
     };
+}
+
+macro_rules! bail_help {
+    () => {
+        bail!(Error::Msg, "Too few arguments... see `--help`")
+    }
 }
