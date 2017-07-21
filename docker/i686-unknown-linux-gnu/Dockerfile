@@ -1,5 +1,5 @@
-FROM ubuntu:xenial
+FROM jaemk/i686-unknown-linux-gnu:v0.2.0
 
 RUN dpkg --add-architecture i386 && \
     apt-get update && apt-get upgrade -y && \
-    apt-get install build-essential gcc-multilib libdbus-1-dev:i386 libssl-dev:i386 -y
+    apt-get install libdbus-1-dev:i386 -y
