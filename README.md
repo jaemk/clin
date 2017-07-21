@@ -48,3 +48,10 @@ clin listen --public --log
 # Don't need to do any port forwarding now
 clin -s --host <clever-hostname-here> -c 'cargo build --release'
 ```
+
+## Updating
+
+```
+clin self update
+```
+
