@@ -1,6 +1,6 @@
 [package]
 name = "clin"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["James Kominick <james.kominick@gmail.com>"]
 repository = "https://github.com/jaemk/clin"
 description = "Command completion desktop notifications"
