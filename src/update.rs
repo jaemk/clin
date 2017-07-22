@@ -84,7 +84,6 @@ impl ReleaseAsset {
 ///     * User entered anything other than Y/y
 fn prompt_ok(msg: &str) -> Result<()> {
     print_flush!("{}", msg);
-    io::stdout().flush()?;
 
     let stdin = io::stdin();
     let mut s = String::new();
@@ -111,11 +110,9 @@ fn display_dl_progress(total_size: u64, bytes_read: u64, clear_size: usize) -> R
 
     let clear_chars = std::iter::repeat("\x08").take(clear_size).collect::<String>();
     print_flush!("{}\r", clear_chars);
-    io::stdout().flush()?;
 
     let bar = format!("{percent: >3}% [{compl: <full_size$}] {total}kB", percent=percent, compl=complete_bars, full_size=bar_width, total=total_size/1000);
     print_flush!("{}", bar);
-    io::stdout().flush()?;
 
     Ok(bar.len())
 }
@@ -210,14 +207,12 @@ pub fn run(show_progress: bool) -> Result<()> {
     let current_exe = env::current_exe()?;
 
     print_flush!("Checking target-arch... ");
-    io::stdout().flush()?;
     let target = get_target()?;
     println!("{}", target);
 
     println!("Checking current version... v{}", CURRENT_VERSION);
 
     print_flush!("Checking latest released version... ");
-    io::stdout().flush()?;
     let mut resp = reqwest::get(API_URL)?;
     if !resp.status().is_success() { bail!(Error::Upgrade, "api request failed with status: {:?}", resp.status()) }
     let latest: serde_json::Value = resp.json()?;
@@ -255,12 +250,10 @@ pub fn run(show_progress: bool) -> Result<()> {
     download_to_file_with_progress(&target_asset.download_url, &mut tmp_tarball, show_progress)?;
 
     print_flush!("Extracting tarball... ");
-    io::stdout().flush()?;
     let new_exe = extract_tarball(&tmp_tarball_path, &tmp_dir.path())?;
     println!("✓");
 
     print_flush!("Replacing binary file... ");
-    io::stdout().flush()?;
     let tmp_file = tmp_dir.path().join(&format!("__{}_backup", BIN_NAME));
     replace_exe(&current_exe, &new_exe, &tmp_file)?;
     println!("✓");
