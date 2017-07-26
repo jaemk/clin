@@ -12,15 +12,13 @@ exclude = ["ci/", ".travis.yml"]
 [dependencies]
 notify-rust = "3.4"
 clap = "2.25"
-serde = "1"
 libc = "0.2"
-serde_derive = "1"
-serde_json = "1"
 log = "0.3"
 env_logger = "0.4"
 chrono = "0.4"
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
 
-reqwest = "0.7"
-tempdir = "0.3"
-flate2 = "0.2"
-tar = "0.4"
+self_update = "0.2"
+

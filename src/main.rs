@@ -8,14 +8,10 @@ extern crate chrono;
 extern crate serde;
 extern crate serde_json;
 
-extern crate reqwest;
-extern crate tempdir;
-extern crate flate2;
-extern crate tar;
+extern crate self_update;
 
 #[macro_use] mod errors;
 mod listen;
-mod update;
 
 use clap::{App, Arg, SubCommand, ArgMatches, AppSettings};
 use notify_rust::{Notification, Timeout};
@@ -240,17 +236,44 @@ fn collect_cmd_note(matches: &ArgMatches) -> Result<(String, Note)> {
 }
 
 
+fn update(matches: &ArgMatches) -> Result<()> {
+    let mut builder = self_update::backends::github::Updater::configure()?;
+
+    builder.repo_owner("jaemk")
+        .repo_name("clin")
+        .target(&self_update::get_target()?)
+        .bin_name("clin")
+        .show_download_progress(true)
+        .no_confirm(matches.is_present("no_confirm"))
+        .current_version(crate_version!());
+
+    if matches.is_present("quiet") {
+        builder.show_output(false)
+            .show_download_progress(false);
+    }
+
+    let status = builder.build()?.update()?;
+    match status {
+        self_update::Status::UpToDate(v) => {
+            println!("Already up to date [v{}]!", v);
+        }
+        self_update::Status::Updated(v) => {
+            println!("Updated to v{}!", v);
+        }
+    }
+    return Ok(());
+}
+
+
 /// Dispatch over arguments
 fn run(matches: ArgMatches) -> Result<()> {
     if let Some(self_matches) = matches.subcommand_matches("self") {
         if let Some(update_matches) = self_matches.subcommand_matches("update") {
-            let show_progress = !update_matches.is_present("quiet");
-            return update::run(show_progress);
+            return update(update_matches);
         }
         bail_help!()
     }
 
-    // Initialize a clin-listener
     if let Some(listen_matches) = matches.subcommand_matches("listen") {
         return listen::start_listener(listen_matches);
     }
@@ -285,6 +308,12 @@ clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
                     .about("Self referential things")
                     .subcommand(SubCommand::with_name("update")
                         .about("Update to the latest binary release, replacing this binary")
+                        .arg(Arg::with_name("no_confirm")
+                             .help("Skip download/update confirmation")
+                             .long("no-confirm")
+                             .short("y")
+                             .required(false)
+                             .takes_value(false))
                         .arg(Arg::with_name("quiet")
                              .help("Suppress unnecessary download output (progress bar)")
                              .long("quiet")
