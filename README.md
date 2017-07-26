@@ -51,6 +51,8 @@ clin -s --host <clever-hostname-here> -c 'cargo build --release'
 
 ## Updating
 
+Update to the latest release available: [`releases`](https://github.com/jaemk/clin/releases)
+
 ```
 clin self update
 ```
