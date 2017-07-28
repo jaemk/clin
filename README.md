@@ -10,6 +10,13 @@ See [`releases`](https://github.com/jaemk/clin/releases) for binary releases, or
 cargo install clin
 ```
 
+Note: when compiling from source, the `feature` `update`, which toggles `self_update` abilities is disabled by default.
+Compiling with this feature requires `libssl-dev` on linux:
+
+```
+cargo install clin --features update
+```
+
 ## Usage
 
 `clin` provides desktop notifications of completed commands.
