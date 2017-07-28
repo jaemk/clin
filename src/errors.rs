@@ -5,6 +5,7 @@ Error type, conversions, and macros
 use std;
 use notify_rust;
 use serde_json;
+#[cfg(feature="update")]
 use self_update;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -21,6 +22,7 @@ pub enum Error {
     ParseInt(std::num::ParseIntError),
     Notify(notify_rust::Error),
     Json(serde_json::Error),
+    #[cfg(feature="update")]
     SelfUpdate(self_update::errors::Error),
 }
 
@@ -38,6 +40,7 @@ impl std::fmt::Display for Error {
             ParseInt(ref e) => write!(f, "ParseIntError: {}", e),
             Notify(ref e)   => write!(f, "NotifyError: {}", e),
             Json(ref e)     => write!(f, "JsonError: {}", e),
+            #[cfg(feature="update")]
             SelfUpdate(ref e)  => write!(f, "SelfUpdateError: {}", e),
         }
     }
@@ -57,6 +60,7 @@ impl std::error::Error for Error {
             ParseInt(ref e)     => e,
             Notify(ref e)       => e,
             Json(ref e)         => e,
+            #[cfg(feature="update")]
             SelfUpdate(ref e)   => e,
             _ => return None,
         })
@@ -94,6 +98,7 @@ impl From<serde_json::Error> for Error {
     }
 }
 
+#[cfg(feature="update")]
 impl From<self_update::errors::Error> for Error {
     fn from(e: self_update::errors::Error) -> Error {
         Error::SelfUpdate(e)

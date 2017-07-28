@@ -8,6 +8,7 @@ extern crate chrono;
 extern crate serde;
 extern crate serde_json;
 
+#[cfg(feature="update")]
 extern crate self_update;
 
 #[macro_use] mod errors;
@@ -236,6 +237,7 @@ fn collect_cmd_note(matches: &ArgMatches) -> Result<(String, Note)> {
 }
 
 
+#[cfg(feature="update")]
 fn update(matches: &ArgMatches) -> Result<()> {
     let mut builder = self_update::backends::github::Updater::configure()?;
 
@@ -262,6 +264,12 @@ fn update(matches: &ArgMatches) -> Result<()> {
         }
     }
     return Ok(());
+}
+
+
+#[cfg(not(feature="update"))]
+fn update(_: &ArgMatches) -> Result<()> {
+    bail!(Error::Msg, "This executable was not compiled with `self_update` features enabled via `--features update`");
 }
 
 
