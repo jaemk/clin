@@ -14,7 +14,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     Msg(String),
-    Upgrade(String),
     Network(String),
     Command(i32),
     Io(std::io::Error),
@@ -32,7 +31,6 @@ impl std::fmt::Display for Error {
         use Error::*;
         match *self {
             Msg(ref s)      => write!(f, "{}", s),
-            Upgrade(ref s)  => write!(f, "UpgradeError: {}", s),
             Network(ref s)  => write!(f, "NetworkError: {}", s),
             Command(n)      => write!(f, "CommandError-StatusCode: {}", n),
             Io(ref e)       => write!(f, "IoError: {}", e),
