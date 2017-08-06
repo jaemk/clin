@@ -239,7 +239,7 @@ fn collect_cmd_note(matches: &ArgMatches) -> Result<(String, Note)> {
 
 #[cfg(feature="update")]
 fn update(matches: &ArgMatches) -> Result<()> {
-    let mut builder = self_update::backends::github::Updater::configure()?;
+    let mut builder = self_update::backends::github::Update::configure()?;
 
     builder.repo_owner("jaemk")
         .repo_name("clin")
@@ -260,7 +260,7 @@ fn update(matches: &ArgMatches) -> Result<()> {
             println!("Already up to date [v{}]!", v);
         }
         self_update::Status::Updated(v) => {
-            println!("Updated to v{}!", v);
+            println!("Updated to {}!", v);
         }
     }
     return Ok(());
