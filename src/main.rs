@@ -26,6 +26,7 @@ use std::net;
 use errors::*;
 
 
+pub static APP_VERSION:         &'static str = crate_version!();
 pub static DEFAULT_TITLE:       &'static str = "CLIN:";
 pub static DEFAULT_ICON:        &'static str = "terminal";
 pub static DEFAULT_HOST:        &'static str = "127.0.0.1";
@@ -247,7 +248,7 @@ fn update(matches: &ArgMatches) -> Result<()> {
         .bin_name("clin")
         .show_download_progress(true)
         .no_confirm(matches.is_present("no_confirm"))
-        .current_version(crate_version!());
+        .current_version(APP_VERSION);
 
     if matches.is_present("quiet") {
         builder.show_output(false)
@@ -303,7 +304,7 @@ fn run(matches: ArgMatches) -> Result<()> {
 fn main() {
     let matches = App::new("CLIN")
         .setting(AppSettings::TrailingVarArg)
-        .version(crate_version!())
+        .version(APP_VERSION)
         .author("James K. <james.kominick@gmail.com>")
         .about("\
 Command line notification tool
