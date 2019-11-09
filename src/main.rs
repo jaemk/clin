@@ -1,41 +1,43 @@
-#[macro_use] extern crate clap;
-extern crate notify_rust;
+#[macro_use]
+extern crate clap;
 extern crate libc;
-#[macro_use] extern crate log;
-extern crate env_logger;
+extern crate notify_rust;
+#[macro_use]
+extern crate log;
 extern crate chrono;
-#[macro_use] extern crate serde_derive;
+extern crate env_logger;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
-#[cfg(feature="update")]
+#[cfg(feature = "update")]
 extern crate self_update;
 
-#[macro_use] mod errors;
+#[macro_use]
+mod errors;
 mod listen;
 
-use clap::{App, Arg, SubCommand, ArgMatches, AppSettings};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use notify_rust::{Notification, Timeout};
 
-use std::io;
 use std::env;
 use std::ffi;
-use std::process;
+use std::io;
 use std::net;
+use std::process;
 
 use errors::*;
 
-
-pub static APP_VERSION:         &'static str = crate_version!();
-pub static DEFAULT_TITLE:       &'static str = "CLIN:";
-pub static DEFAULT_ICON:        &'static str = "terminal";
-pub static DEFAULT_HOST:        &'static str = "127.0.0.1";
-pub static DEFAULT_PORT_STR:    &'static str = "6445";
-pub static DEFAULT_PORT:        u32          = 6445;
+pub static APP_VERSION: &'static str = crate_version!();
+pub static DEFAULT_TITLE: &'static str = "CLIN:";
+pub static DEFAULT_ICON: &'static str = "terminal";
+pub static DEFAULT_HOST: &'static str = "127.0.0.1";
+pub static DEFAULT_PORT_STR: &'static str = "6445";
+pub static DEFAULT_PORT: u32 = 6445;
 pub static DEFAULT_TIMEOUT_STR: &'static str = "10000";
-pub static DEFAULT_TIMEOUT:     u32          = 10000;
+pub static DEFAULT_TIMEOUT: u32 = 10000;
 pub static DEFAULT_TIMEOUT_SECONDS_STR: &'static str = "10";
-
 
 /// Notification information to send over the wire from a remote client
 /// to a local listening server
@@ -68,7 +70,6 @@ impl ApiNote {
     }
 }
 
-
 /// Notification builder
 pub struct Note {
     title: String,
@@ -87,7 +88,8 @@ impl Note {
             timeout: DEFAULT_TIMEOUT,
             send: false,
             host: DEFAULT_HOST.to_owned(),
-            port: DEFAULT_PORT }
+            port: DEFAULT_PORT,
+        }
     }
 
     /// Set a title, overriding the default
@@ -149,7 +151,6 @@ impl Note {
     }
 }
 
-
 /// Check if we can connect to the specified receiver
 ///
 /// Errors:
@@ -163,7 +164,6 @@ fn can_connect(host: &str, port: u32) -> Result<()> {
     Ok(())
 }
 
-
 /// Run a command in foreground
 ///
 /// Errors:
@@ -176,10 +176,11 @@ fn run_command(cmd: &str) -> Result<()> {
         // convert child status code to a normal code 0-255
         libc::WEXITSTATUS(ret)
     };
-    if ret != 0 { return Err(Error::Command(ret)) }
+    if ret != 0 {
+        return Err(Error::Command(ret));
+    }
     Ok(())
 }
-
 
 /// Collect all default and overridden notification parameters from argument matches,
 /// returning a captured command-string and a constructed `Note`
@@ -190,29 +191,40 @@ fn run_command(cmd: &str) -> Result<()> {
 ///     * No `command-string` provided
 fn collect_cmd_note(matches: &ArgMatches) -> Result<(String, Note)> {
     // Capture default and overridden notification arguments
-    let send = matches.is_present("send") ||
-        env::var("CLIN_SEND").ok()
+    let send = matches.is_present("send")
+        || env::var("CLIN_SEND")
+            .ok()
             .and_then(|s| if s == "1" { Some(()) } else { None })
             .is_some();
     let fallback_host = env::var("CLIN_SEND_HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
-    let host = matches.value_of("host")
-        .unwrap_or(&fallback_host);
+    let host = matches.value_of("host").unwrap_or(&fallback_host);
     let fallback_port = env::var("CLIN_SEND_PORT").unwrap_or_else(|_| DEFAULT_PORT_STR.to_string());
-    let port = matches.value_of("port")
+    let port = matches
+        .value_of("port")
         .unwrap_or(&fallback_port)
         .parse::<u32>()?;
-    let fallback_timeout = env::var("CLIN_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_STR.to_string());
-    let timeout = matches.value_of("timeout")
+    let fallback_timeout =
+        env::var("CLIN_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_STR.to_string());
+    let timeout = matches
+        .value_of("timeout")
         .unwrap_or(&fallback_timeout)
         .parse::<u32>()?;
 
     // If sending, make sure specified connection works
     if send && can_connect(&host, port).is_err() {
-        bail!(Error::Network, "Unable to connect to clin-listener at `{}:{}`", host, port)
+        bail!(
+            Error::Network,
+            "Unable to connect to clin-listener at `{}:{}`",
+            host,
+            port
+        )
     }
 
     // Capture command contents or bail out if nothing was provided
-    let cmd = match (matches.value_of("command_string"), matches.is_present("cmd")) {
+    let cmd = match (
+        matches.value_of("command_string"),
+        matches.is_present("cmd"),
+    ) {
         (Some(c), _) => c.to_owned(),
         (_, true) => {
             // Pull out the full trailing args list...
@@ -225,9 +237,7 @@ fn collect_cmd_note(matches: &ArgMatches) -> Result<(String, Note)> {
             let (_, args) = args.split_at(ind + 1);
             args.join(" ")
         }
-        _ => {
-            bail_help!()
-        }
+        _ => bail_help!(),
     };
     let note = Note::with_msg(&cmd)
         .timeout(timeout)
@@ -237,22 +247,21 @@ fn collect_cmd_note(matches: &ArgMatches) -> Result<(String, Note)> {
     Ok((cmd, note))
 }
 
-
-#[cfg(feature="update")]
+#[cfg(feature = "update")]
 fn update(matches: &ArgMatches) -> Result<()> {
-    let mut builder = self_update::backends::github::Update::configure()?;
+    let mut builder = self_update::backends::github::Update::configure();
 
-    builder.repo_owner("jaemk")
+    builder
+        .repo_owner("jaemk")
         .repo_name("clin")
-        .target(&self_update::get_target()?)
+        .target(self_update::get_target())
         .bin_name("clin")
         .show_download_progress(true)
         .no_confirm(matches.is_present("no_confirm"))
         .current_version(APP_VERSION);
 
     if matches.is_present("quiet") {
-        builder.show_output(false)
-            .show_download_progress(false);
+        builder.show_output(false).show_download_progress(false);
     }
 
     let status = builder.build()?.update()?;
@@ -267,12 +276,10 @@ fn update(matches: &ArgMatches) -> Result<()> {
     return Ok(());
 }
 
-
-#[cfg(not(feature="update"))]
+#[cfg(not(feature = "update"))]
 fn update(_: &ArgMatches) -> Result<()> {
     bail!(Error::Msg, "This executable was not compiled with `self_update` features enabled via `--features update`");
 }
-
 
 /// Dispatch over arguments
 fn run(matches: ArgMatches) -> Result<()> {
@@ -291,15 +298,12 @@ fn run(matches: ArgMatches) -> Result<()> {
     println!("clin: `{}`", cmd);
 
     let title = match run_command(&cmd) {
-        Err(Error::Command(ret)) => {
-            format!("Error ✗ -- exit status: {}", ret)
-        }
+        Err(Error::Command(ret)) => format!("Error ✗ -- exit status: {}", ret),
         Err(e) => return Err(e),
         Ok(_) => "Complete ✓".to_string(),
     };
     note.title(&title).push()
 }
-
 
 fn main() {
     let matches = App::new("CLIN")
@@ -386,9 +390,7 @@ clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
     if let Err(e) = run(matches) {
         use io::Write;
         let mut stderr = io::stderr();
-        writeln!(stderr, "[ERROR] {}", e)
-            .expect("Failed writing to stderr");
+        writeln!(stderr, "[ERROR] {}", e).expect("Failed writing to stderr");
         process::exit(1);
     }
 }
-

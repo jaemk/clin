@@ -2,14 +2,13 @@
 Error type, conversions, and macros
 
 */
-use std;
 use notify_rust;
-use serde_json;
-#[cfg(feature="update")]
+#[cfg(feature = "update")]
 use self_update;
+use serde_json;
+use std;
 
 pub type Result<T> = std::result::Result<T, Error>;
-
 
 #[derive(Debug)]
 pub enum Error {
@@ -21,50 +20,47 @@ pub enum Error {
     ParseInt(std::num::ParseIntError),
     Notify(notify_rust::Error),
     Json(serde_json::Error),
-    #[cfg(feature="update")]
+    #[cfg(feature = "update")]
     SelfUpdate(self_update::errors::Error),
 }
-
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use Error::*;
         match *self {
-            Msg(ref s)      => write!(f, "{}", s),
-            Network(ref s)  => write!(f, "NetworkError: {}", s),
-            Command(n)      => write!(f, "CommandError-StatusCode: {}", n),
-            Io(ref e)       => write!(f, "IoError: {}", e),
-            Nul(ref e)      => write!(f, "NulError: {}", e),
+            Msg(ref s) => write!(f, "{}", s),
+            Network(ref s) => write!(f, "NetworkError: {}", s),
+            Command(n) => write!(f, "CommandError-StatusCode: {}", n),
+            Io(ref e) => write!(f, "IoError: {}", e),
+            Nul(ref e) => write!(f, "NulError: {}", e),
             ParseInt(ref e) => write!(f, "ParseIntError: {}", e),
-            Notify(ref e)   => write!(f, "NotifyError: {}", e),
-            Json(ref e)     => write!(f, "JsonError: {}", e),
-            #[cfg(feature="update")]
-            SelfUpdate(ref e)  => write!(f, "SelfUpdateError: {}", e),
+            Notify(ref e) => write!(f, "NotifyError: {}", e),
+            Json(ref e) => write!(f, "JsonError: {}", e),
+            #[cfg(feature = "update")]
+            SelfUpdate(ref e) => write!(f, "SelfUpdateError: {}", e),
         }
     }
 }
-
 
 impl std::error::Error for Error {
     fn description(&self) -> &str {
         "CLIN Error"
     }
 
-    fn cause(&self) -> Option<&std::error::Error> {
+    fn cause(&self) -> Option<&dyn std::error::Error> {
         use Error::*;
         Some(match *self {
-            Io(ref e)           => e,
-            Nul(ref e)          => e,
-            ParseInt(ref e)     => e,
-            Notify(ref e)       => e,
-            Json(ref e)         => e,
-            #[cfg(feature="update")]
-            SelfUpdate(ref e)   => e,
+            Io(ref e) => e,
+            Nul(ref e) => e,
+            ParseInt(ref e) => e,
+            Notify(ref e) => e,
+            Json(ref e) => e,
+            #[cfg(feature = "update")]
+            SelfUpdate(ref e) => e,
             _ => return None,
         })
     }
 }
-
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Error {
@@ -96,13 +92,12 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-#[cfg(feature="update")]
+#[cfg(feature = "update")]
 impl From<self_update::errors::Error> for Error {
     fn from(e: self_update::errors::Error) -> Error {
         Error::SelfUpdate(e)
     }
 }
-
 
 macro_rules! format_err {
     ($e_type:expr, $literal:expr) => {
@@ -125,5 +120,5 @@ macro_rules! bail {
 macro_rules! bail_help {
     () => {
         bail!(Error::Msg, "Too few arguments... see `--help`")
-    }
+    };
 }
