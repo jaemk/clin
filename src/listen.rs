@@ -5,6 +5,7 @@ use std::net;
 use chrono::Local;
 use clap::ArgMatches;
 use env_logger;
+use log::info;
 use serde_json;
 
 use super::{ApiNote, Note, DEFAULT_PORT_STR};

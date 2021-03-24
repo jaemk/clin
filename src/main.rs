@@ -1,24 +1,11 @@
 #[macro_use]
-extern crate clap;
-extern crate libc;
-extern crate notify_rust;
-#[macro_use]
-extern crate log;
-extern crate chrono;
-extern crate env_logger;
-#[macro_use]
 extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
-
-#[cfg(feature = "update")]
-extern crate self_update;
 
 #[macro_use]
 mod errors;
 mod listen;
 
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
+use clap::{crate_version, App, AppSettings, Arg, ArgMatches, SubCommand};
 use notify_rust::{Notification, Timeout};
 
 use std::env;
@@ -31,6 +18,7 @@ use errors::*;
 
 pub static APP_VERSION: &'static str = crate_version!();
 pub static DEFAULT_TITLE: &'static str = "CLIN:";
+pub static DEFAULT_MESSAGE: &'static str = "clin!";
 pub static DEFAULT_ICON: &'static str = "terminal";
 pub static DEFAULT_HOST: &'static str = "127.0.0.1";
 pub static DEFAULT_PORT_STR: &'static str = "6445";
@@ -72,12 +60,12 @@ impl ApiNote {
 
 /// Notification builder
 pub struct Note {
-    title: String,
-    msg: String,
-    timeout: u32,
-    send: bool,
-    host: String,
-    port: u32,
+    pub title: String,
+    pub msg: String,
+    pub timeout: u32,
+    pub send: bool,
+    pub host: String,
+    pub port: u32,
 }
 impl Note {
     /// Create a new notification with a given message and default values
@@ -90,6 +78,11 @@ impl Note {
             host: DEFAULT_HOST.to_owned(),
             port: DEFAULT_PORT,
         }
+    }
+
+    pub fn msg(mut self, msg: &str) -> Note {
+        self.msg = msg.to_owned();
+        self
     }
 
     /// Set a title, overriding the default
@@ -120,6 +113,35 @@ impl Note {
     pub fn port(mut self, port: u32) -> Note {
         self.port = port;
         self
+    }
+
+    fn from_matches(matches: &ArgMatches) -> Result<Note> {
+        // Capture default and overridden notification arguments
+        let send = matches.is_present("send")
+            || env::var("CLIN_SEND")
+                .ok()
+                .and_then(|s| if s == "1" { Some(()) } else { None })
+                .is_some();
+        let fallback_host = env::var("CLIN_SEND_HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
+        let host = matches.value_of("host").unwrap_or(&fallback_host);
+        let fallback_port =
+            env::var("CLIN_SEND_PORT").unwrap_or_else(|_| DEFAULT_PORT_STR.to_string());
+        let port = matches
+            .value_of("port")
+            .unwrap_or(&fallback_port)
+            .parse::<u32>()?;
+        let fallback_timeout =
+            env::var("CLIN_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_STR.to_string());
+        let timeout = matches
+            .value_of("timeout")
+            .unwrap_or(&fallback_timeout)
+            .parse::<u32>()?;
+        let note = Note::with_msg(DEFAULT_MESSAGE)
+            .timeout(timeout)
+            .send(send)
+            .host(host)
+            .port(port);
+        Ok(note)
     }
 
     /// Create the notification locally, or send it over the wire
@@ -190,33 +212,15 @@ fn run_command(cmd: &str) -> Result<()> {
 ///     * Unable to connect to specified listener with provided `host`/`port`
 ///     * No `command-string` provided
 fn collect_cmd_note(matches: &ArgMatches) -> Result<(String, Note)> {
-    // Capture default and overridden notification arguments
-    let send = matches.is_present("send")
-        || env::var("CLIN_SEND")
-            .ok()
-            .and_then(|s| if s == "1" { Some(()) } else { None })
-            .is_some();
-    let fallback_host = env::var("CLIN_SEND_HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
-    let host = matches.value_of("host").unwrap_or(&fallback_host);
-    let fallback_port = env::var("CLIN_SEND_PORT").unwrap_or_else(|_| DEFAULT_PORT_STR.to_string());
-    let port = matches
-        .value_of("port")
-        .unwrap_or(&fallback_port)
-        .parse::<u32>()?;
-    let fallback_timeout =
-        env::var("CLIN_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_STR.to_string());
-    let timeout = matches
-        .value_of("timeout")
-        .unwrap_or(&fallback_timeout)
-        .parse::<u32>()?;
+    let note = Note::from_matches(&matches)?;
 
     // If sending, make sure specified connection works
-    if send && can_connect(&host, port).is_err() {
+    if note.send && can_connect(&note.host, note.port).is_err() {
         bail!(
             Error::Network,
             "Unable to connect to clin-listener at `{}:{}`",
-            host,
-            port
+            note.host,
+            note.port
         )
     }
 
@@ -239,11 +243,7 @@ fn collect_cmd_note(matches: &ArgMatches) -> Result<(String, Note)> {
         }
         _ => bail_help!(),
     };
-    let note = Note::with_msg(&cmd)
-        .timeout(timeout)
-        .send(send)
-        .host(host)
-        .port(port);
+    let note = note.msg(&cmd);
     Ok((cmd, note))
 }
 
@@ -294,8 +294,16 @@ fn run(matches: ArgMatches) -> Result<()> {
         return listen::start_listener(listen_matches);
     }
 
+    if let Some(msg) = matches.value_of("message_string") {
+        Note::from_matches(&matches)?
+            .msg(msg)
+            .title("clin")
+            .push()?;
+        return Ok(());
+    }
+
     let (cmd, note) = collect_cmd_note(&matches)?;
-    println!("clin: `{}`", cmd);
+    eprintln!("clin: `{}`", cmd);
 
     let title = match run_command(&cmd) {
         Err(Error::Command(ret)) => format!("Error ✗ -- exit status: {}", ret),
@@ -306,17 +314,18 @@ fn run(matches: ArgMatches) -> Result<()> {
 }
 
 fn main() {
-    let matches = App::new("CLIN")
+    let matches = App::new("clin")
         .setting(AppSettings::TrailingVarArg)
         .version(APP_VERSION)
-        .author("James K. <james.kominick@gmail.com>")
+        .author("James K. <james@kominick.com>")
         .about("\
 Command line notification tool
 Supports local and networked notifications
 
 examples:
 clin -- ./some-build-script.sh --flag --arg1 'some arg'
-clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
+clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"
+clin -m \"just post this message\"")
         .subcommand(SubCommand::with_name("self")
                     .about("Self referential things")
                     .subcommand(SubCommand::with_name("update")
@@ -374,6 +383,12 @@ clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
              .short("t")
              .required(false)
              .takes_value(true))
+        .arg(Arg::with_name("message_string")
+             .help("Message to post as a notification, overrides cmd string and trailing args")
+             .long("message")
+             .short("m")
+             .required(false)
+             .takes_value(true))
         .arg(Arg::with_name("command_string")
              .help("Specify command to run as a string, overrides trailing args")
              .long("command")
@@ -388,9 +403,7 @@ clin -c \"./some-build-script.sh --flag --arg1 'some arg'\"")
         .get_matches();
 
     if let Err(e) = run(matches) {
-        use io::Write;
-        let mut stderr = io::stderr();
-        writeln!(stderr, "[ERROR] {}", e).expect("Failed writing to stderr");
+        eprintln!("[ERROR] {}", e);
         process::exit(1);
     }
 }
